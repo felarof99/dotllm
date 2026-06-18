@@ -19,11 +19,16 @@ type app struct {
 	repo   repo.Resolver
 	now    func() time.Time
 	root   string // archive root (~/.llm or $DOTLLM_HOME)
+	home   string // user home dir (holds ~/.codex/config.toml and ~/.claude.json)
 	wd     func() (string, error)
 }
 
 func newApp() (*app, error) {
 	root, err := store.Root()
+	if err != nil {
+		return nil, err
+	}
+	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, err
 	}
@@ -33,6 +38,7 @@ func newApp() (*app, error) {
 		repo:   repo.Git{},
 		now:    time.Now,
 		root:   root,
+		home:   home,
 		wd:     os.Getwd,
 	}, nil
 }
@@ -57,6 +63,7 @@ every new tmux pane. With no arguments, dotllm prints the current status.`,
 	rootCmd.AddCommand(newStatusCmd(a))
 	rootCmd.AddCommand(newListCmd(a))
 	rootCmd.AddCommand(newPruneCmd(a))
+	rootCmd.AddCommand(newTrustCmd(a))
 	rootCmd.SetOut(a.out)
 	rootCmd.SetErr(a.errOut)
 	rootCmd.CompletionOptions.HiddenDefaultCmd = true
