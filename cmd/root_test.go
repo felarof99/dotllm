@@ -11,10 +11,13 @@ import (
 
 // fakeRepo is an injectable repo.Resolver for hermetic command tests.
 type fakeRepo struct {
-	repo string
+	repo       string
+	mainRoot   string
+	isWorktree bool
 }
 
-func (f fakeRepo) Repo(string) (string, error) { return f.repo, nil }
+func (f fakeRepo) Repo(string) (string, error)           { return f.repo, nil }
+func (f fakeRepo) MainRoot(string) (string, bool, error) { return f.mainRoot, f.isWorktree, nil }
 
 // testApp builds an app whose deps are all fakes: output to a buffer, a fixed
 // clock (2026-06-14), a temp archive root, and a fixed working directory.

@@ -29,7 +29,13 @@ files into the archive without overwriting), and re-attaches if the archive dir
 exists but the local link is gone.
 
 By default the bucket is just <repo>/<date>. Pass a task label (via --name or
-the positional argument) to get a separate <date>_<task> bucket.`,
+the positional argument) to get a separate <date>_<task> bucket.
+
+In a linked git worktree, init instead mirrors the main checkout's .llm — it
+links to wherever the primary worktree's .llm points (or to its real .llm dir) —
+so every worktree of a repo shares one scratch+status tree and tools rooted at
+the main .llm (e.g. a daemon) see work done in any worktree. Pass --repo or
+--name to opt out and force a distinct bucket.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			task := name
@@ -60,6 +66,28 @@ func runInit(a *app, in initArgs) error {
 	if err != nil {
 		return err
 	}
+
+	// A linked worktree shares its main checkout's .llm, so every worktree of a
+	// repo — and a daemon/tool rooted at the main .llm — see one scratch+status
+	// tree. (Skip when an explicit --repo/--name asks for a distinct bucket.)
+	if in.repo == "" && in.name == "" {
+		mainRoot, isWorktree, err := a.repo.MainRoot(dir)
+		if err != nil {
+			return err
+		}
+		if isWorktree {
+			if canonical, ok := mainLLMTarget(a.root, mainRoot); ok {
+				res, err := workspace.Init(workspace.InitOptions{Dir: dir, Canonical: canonical, Force: in.force})
+				if err != nil {
+					return err
+				}
+				return reportInit(a, in, res)
+			}
+			// main has no .llm yet: fall through to the normal bucket. With the
+			// shared repo name, that's the same dir main adopts on its own init.
+		}
+	}
+
 	r, err := a.resolve(dir, in.repo, in.name)
 	if err != nil {
 		return err
@@ -73,7 +101,25 @@ func runInit(a *app, in initArgs) error {
 	if err != nil {
 		return err
 	}
+	return reportInit(a, in, res)
+}
 
+// mainLLMTarget resolves where a worktree should point its .llm to mirror the
+// main checkout's: the link's target if main's .llm is a symlink, else the real
+// .llm directory itself (e.g. a tool's root that isn't dotllm-managed). ok is
+// false when main has no .llm yet.
+func mainLLMTarget(root, mainRoot string) (string, bool) {
+	st, err := workspace.Stat(mainRoot, root)
+	if err != nil || st.Kind == workspace.Absent {
+		return "", false
+	}
+	if st.IsSymlink && st.Target != "" {
+		return st.Target, true
+	}
+	return st.Local, true
+}
+
+func reportInit(a *app, in initArgs, res workspace.InitResult) error {
 	if in.json {
 		return printJSON(a.out, res)
 	}

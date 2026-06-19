@@ -121,6 +121,60 @@ func TestInitIdempotentReportsAlready(t *testing.T) {
 	}
 }
 
+func TestInitWorktreeMirrorsMainRealLLM(t *testing.T) {
+	// main's .llm is a real directory (e.g. a tool's root that isn't managed).
+	// A worktree init must link straight to it, not mint a fresh dated bucket.
+	mainRoot := t.TempDir()
+	mainLLM := filepath.Join(mainRoot, ".llm")
+	if err := os.MkdirAll(mainLLM, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	wt := t.TempDir()
+	a, _ := testApp(t, wt, fakeRepo{repo: "skl", mainRoot: mainRoot, isWorktree: true})
+	if err := runCmd(a, "init"); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := linkTarget(t, wt), filepath.Clean(mainLLM); got != want {
+		t.Errorf("worktree .llm -> %q, want main's real .llm %q", got, want)
+	}
+}
+
+func TestInitWorktreeMirrorsManagedMain(t *testing.T) {
+	// main's .llm is a managed symlink into the archive; the worktree should
+	// point at the same archive dir (the link's target), not a chained link.
+	mainRoot := t.TempDir()
+	wt := t.TempDir()
+	a, _ := testApp(t, wt, fakeRepo{repo: "skl", mainRoot: mainRoot, isWorktree: true})
+	managed := filepath.Join(a.root, "skl", "2026-06-14")
+	if err := os.MkdirAll(managed, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(managed, filepath.Join(mainRoot, ".llm")); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(a, "init"); err != nil {
+		t.Fatal(err)
+	}
+	if got := linkTarget(t, wt); got != managed {
+		t.Errorf("worktree .llm -> %q, want shared archive dir %q", got, managed)
+	}
+}
+
+func TestInitWorktreeFallsBackWhenMainAbsent(t *testing.T) {
+	// main has no .llm yet: the worktree falls back to the normal bucket, which
+	// (sharing the main repo's name) is what main adopts on its own init.
+	mainRoot := t.TempDir() // no .llm
+	wt := t.TempDir()
+	a, _ := testApp(t, wt, fakeRepo{repo: "skl", mainRoot: mainRoot, isWorktree: true})
+	if err := runCmd(a, "init"); err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(a.root, "skl", "2026-06-14")
+	if got := linkTarget(t, wt); got != want {
+		t.Errorf("worktree .llm -> %q, want fallback bucket %q", got, want)
+	}
+}
+
 func TestInitForeignSymlinkNeedsForce(t *testing.T) {
 	wd := t.TempDir()
 	other := t.TempDir()

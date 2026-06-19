@@ -69,3 +69,66 @@ func TestGitRepoFallsBackToDirBasename(t *testing.T) {
 		t.Errorf("Repo = %q, want myproject", got)
 	}
 }
+
+// withFakeGitWorktree fakes a git that answers --git-common-dir and
+// --show-toplevel, so worktree detection can be exercised hermetically.
+func withFakeGitWorktree(t *testing.T, common, toplevel string) {
+	t.Helper()
+	bin := t.TempDir()
+	script := "#!/bin/sh\n" +
+		"case \"$*\" in\n" +
+		"  *git-common-dir*) echo '" + common + "' ;;\n" +
+		"  *show-toplevel*) echo '" + toplevel + "' ;;\n" +
+		"  *) exit 1 ;;\n" +
+		"esac\n"
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func TestRepoUsesMainRepoNameInWorktree(t *testing.T) {
+	// A linked worktree (toplevel differs from the common dir's parent) resolves
+	// to the MAIN repo's name, not the worktree directory's name.
+	withFakeGitWorktree(t, "/Users/x/code/skl/.git", "/Users/x/code/skl.feat-foo")
+	got, err := Git{}.Repo("/Users/x/code/skl.feat-foo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "skl" {
+		t.Errorf("Repo = %q, want skl (main repo, not the worktree dir)", got)
+	}
+}
+
+func TestMainRootDetectsLinkedWorktree(t *testing.T) {
+	withFakeGitWorktree(t, "/Users/x/code/skl/.git", "/Users/x/code/skl.feat-foo")
+	root, isWT, err := Git{}.MainRoot("/Users/x/code/skl.feat-foo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if root != "/Users/x/code/skl" || !isWT {
+		t.Errorf("MainRoot = (%q, %v), want (/Users/x/code/skl, true)", root, isWT)
+	}
+}
+
+func TestMainRootMainCheckoutIsNotWorktree(t *testing.T) {
+	withFakeGitWorktree(t, "/Users/x/code/skl/.git", "/Users/x/code/skl")
+	root, isWT, err := Git{}.MainRoot("/Users/x/code/skl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if root != "/Users/x/code/skl" || isWT {
+		t.Errorf("MainRoot = (%q, %v), want (/Users/x/code/skl, false)", root, isWT)
+	}
+}
+
+func TestMainRootNonGitDir(t *testing.T) {
+	withFakeGit(t, "") // everything but show-toplevel exits 1; common-dir fails too
+	root, isWT, err := Git{}.MainRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if root != "" || isWT {
+		t.Errorf("MainRoot = (%q, %v), want (\"\", false) for a non-git dir", root, isWT)
+	}
+}
