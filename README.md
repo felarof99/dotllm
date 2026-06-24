@@ -113,6 +113,8 @@ your tmux or shell config itself — copy what you want.
 
 - Two different repos that share a basename (e.g. two `app/`) share one archive
   bucket. Use `--repo` to disambiguate.
-- Each git **worktree** resolves to its own toplevel basename, so worktrees get
-  separate buckets by default; `--repo` groups them.
+- Linked git **worktrees** share by default: `init` mirrors the main checkout's
+  `.llm` when it exists, and otherwise falls back to the main checkout's repo
+  name. Use an explicit root selector (`--repo`, `--project`, `--date`, or
+  `--name`) when you want a distinct canonical bucket instead of mirroring.
 - Add `.llm` to your project's `.gitignore` if you don't want the symlink tracked.
