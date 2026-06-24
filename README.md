@@ -20,8 +20,11 @@ instant and copy-free, and removing the local symlink never loses data.
 
 - **`<repo>`** — basename of the git toplevel (`git rev-parse --show-toplevel`),
   or the current directory's basename when you're not in a git work tree.
-  Override with `--repo`.
+  Override with `--repo`, or use `--project` when you want a shared high-level
+  label that is not tied to the checkout name.
 - **`<yyyy-mm-dd>`** — today's date. ISO format so the archive sorts by time.
+  Override with `--date YYYY-MM-DD` when multiple agents need to pin the same
+  workspace root.
 - **`<task>`** — optional, omitted by default. Pass a label via `--name` or the
   positional argument to get a separate `<date>_<task>` bucket — handy when you
   run several distinct tasks in one repo on one day.
@@ -29,6 +32,15 @@ instant and copy-free, and removing the local symlink never loses data.
 By default the bucket is just `<repo>/<date>`, so every pane you open in a repo
 on the same day shares one workspace and auto-init (below) creates at most one
 empty dir per repo/day — `dotllm prune` cleans those up.
+
+For agents launched from different checkouts or directories, pass the same
+project/date pair:
+
+```sh
+dotllm init --project BrowserOS --date 2026-06-23
+```
+
+Both agents will link `./.llm` to `~/.llm/BrowserOS/2026-06-23/`.
 
 ## Install
 
@@ -42,6 +54,10 @@ make install      # builds to $(go env GOPATH)/bin/dotllm
 dotllm init [task]     Create/re-link this dir's .llm into the archive.
                        -n, --name <task>   task label (default: none -> plain <date> bucket)
                            --repo <name>   override the detected repo name
+                           --project <label>
+                                           shared high-level project label (alias for --repo)
+                           --date <yyyy-mm-dd>
+                                           override the date bucket (default: today)
                        -f, --force         re-point a .llm that points elsewhere
                        -q, --quiet         no output on success (for hooks)
                            --json          print the result as JSON
@@ -97,6 +113,8 @@ your tmux or shell config itself — copy what you want.
 
 - Two different repos that share a basename (e.g. two `app/`) share one archive
   bucket. Use `--repo` to disambiguate.
-- Each git **worktree** resolves to its own toplevel basename, so worktrees get
-  separate buckets by default; `--repo` groups them.
-- Add `.llm/` to your project's `.gitignore` if you don't want the symlink tracked.
+- Linked git **worktrees** share by default: `init` mirrors the main checkout's
+  `.llm` when it exists, and otherwise falls back to the main checkout's repo
+  name. Use an explicit root selector (`--repo`, `--project`, `--date`, or
+  `--name`) when you want a distinct canonical bucket instead of mirroring.
+- Add `.llm` to your project's `.gitignore` if you don't want the symlink tracked.

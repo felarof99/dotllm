@@ -74,6 +74,52 @@ func TestInitRepoOverride(t *testing.T) {
 	}
 }
 
+func TestInitProjectAndDateOverride(t *testing.T) {
+	wd := t.TempDir()
+	a, _ := testApp(t, wd, fakeRepo{repo: "autodetected"})
+	if err := runCmd(a, "init", "--project", "BrowserOS", "--date", "2026-06-23"); err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(a.root, "BrowserOS", "2026-06-23")
+	if got := linkTarget(t, wd); got != want {
+		t.Errorf("link target = %q, want %q", got, want)
+	}
+}
+
+func TestInitProjectDefaultsToToday(t *testing.T) {
+	wd := t.TempDir()
+	a, _ := testApp(t, wd, fakeRepo{repo: "autodetected"})
+	if err := runCmd(a, "init", "--project", "BrowserOS"); err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(a.root, "BrowserOS", "2026-06-14")
+	if got := linkTarget(t, wd); got != want {
+		t.Errorf("link target = %q, want %q", got, want)
+	}
+}
+
+func TestInitRejectsConflictingRepoAndProject(t *testing.T) {
+	wd := t.TempDir()
+	a, _ := testApp(t, wd, fakeRepo{repo: "autodetected"})
+	if err := runCmd(a, "init", "--repo", "one", "--project", "two"); err == nil {
+		t.Fatal("conflicting --repo and --project should error")
+	}
+	if _, err := os.Lstat(filepath.Join(wd, ".llm")); !os.IsNotExist(err) {
+		t.Fatalf(".llm should not be created after conflict, err = %v", err)
+	}
+}
+
+func TestInitRejectsInvalidDateWithoutLink(t *testing.T) {
+	wd := t.TempDir()
+	a, _ := testApp(t, wd, fakeRepo{repo: "app"})
+	if err := runCmd(a, "init", "--date", "2026-6-23"); err == nil {
+		t.Fatal("invalid --date should error")
+	}
+	if _, err := os.Lstat(filepath.Join(wd, ".llm")); !os.IsNotExist(err) {
+		t.Fatalf(".llm should not be created after invalid date, err = %v", err)
+	}
+}
+
 func TestInitJSON(t *testing.T) {
 	wd := t.TempDir()
 	a, buf := testApp(t, wd, fakeRepo{repo: "app"})

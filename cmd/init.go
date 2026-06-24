@@ -11,13 +11,14 @@ import (
 type initArgs struct {
 	name  string // explicit task label (flag or positional)
 	repo  string // repo override
+	date  string // explicit date bucket
 	force bool
 	quiet bool
 	json  bool
 }
 
 func newInitCmd(a *app) *cobra.Command {
-	var name, repoOverride string
+	var name, repoOverride, projectOverride, dateOverride string
 	var force, quiet, jsonOut bool
 
 	cmd := &cobra.Command{
@@ -31,20 +32,29 @@ exists but the local link is gone.
 By default the bucket is just <repo>/<date>. Pass a task label (via --name or
 the positional argument) to get a separate <date>_<task> bucket.
 
+Pass --project <label> and optional --date <YYYY-MM-DD> from multiple agents to
+force the same ~/.llm/<project>/<date> root even when their working directories
+or git repos differ. --project is a clearer alias for --repo.
+
 In a linked git worktree, init instead mirrors the main checkout's .llm — it
 links to wherever the primary worktree's .llm points (or to its real .llm dir) —
 so every worktree of a repo shares one scratch+status tree and tools rooted at
-the main .llm (e.g. a daemon) see work done in any worktree. Pass --repo or
---name to opt out and force a distinct bucket.`,
+the main .llm (e.g. a daemon) see work done in any worktree. Pass any explicit
+root selector (--repo, --project, --date, or --name) to force a distinct bucket.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			task := name
 			if task == "" && len(args) > 0 {
 				task = args[0]
 			}
+			repo, err := chooseRepoOverride(repoOverride, projectOverride)
+			if err != nil {
+				return err
+			}
 			return runInit(a, initArgs{
 				name:  task,
-				repo:  repoOverride,
+				repo:  repo,
+				date:  dateOverride,
 				force: force,
 				quiet: quiet,
 				json:  jsonOut,
@@ -55,10 +65,22 @@ the main .llm (e.g. a daemon) see work done in any worktree. Pass --repo or
 	f := cmd.Flags()
 	f.StringVarP(&name, "name", "n", "", "task label (default: none — a plain <date> bucket)")
 	f.StringVar(&repoOverride, "repo", "", "override the auto-detected repo name")
+	f.StringVar(&projectOverride, "project", "", "shared high-level project label (alias for --repo)")
+	f.StringVar(&dateOverride, "date", "", "archive date bucket (YYYY-MM-DD; default: today)")
 	f.BoolVarP(&force, "force", "f", false, "re-point a .llm symlink that points elsewhere")
 	f.BoolVarP(&quiet, "quiet", "q", false, "print nothing on success (for hooks)")
 	f.BoolVar(&jsonOut, "json", false, "print the result as JSON")
 	return cmd
+}
+
+func chooseRepoOverride(repoOverride, projectOverride string) (string, error) {
+	if repoOverride != "" && projectOverride != "" && repoOverride != projectOverride {
+		return "", fmt.Errorf("--repo and --project both set; pass only one shared project label")
+	}
+	if projectOverride != "" {
+		return projectOverride, nil
+	}
+	return repoOverride, nil
 }
 
 func runInit(a *app, in initArgs) error {
@@ -69,8 +91,8 @@ func runInit(a *app, in initArgs) error {
 
 	// A linked worktree shares its main checkout's .llm, so every worktree of a
 	// repo — and a daemon/tool rooted at the main .llm — see one scratch+status
-	// tree. (Skip when an explicit --repo/--name asks for a distinct bucket.)
-	if in.repo == "" && in.name == "" {
+	// tree. (Skip when explicit root selectors ask for a distinct bucket.)
+	if in.repo == "" && in.name == "" && in.date == "" {
 		mainRoot, isWorktree, err := a.repo.MainRoot(dir)
 		if err != nil {
 			return err
@@ -88,7 +110,7 @@ func runInit(a *app, in initArgs) error {
 		}
 	}
 
-	r, err := a.resolve(dir, in.repo, in.name)
+	r, err := a.resolve(dir, in.repo, in.name, in.date)
 	if err != nil {
 		return err
 	}
