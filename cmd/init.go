@@ -39,8 +39,8 @@ or git repos differ. --project is a clearer alias for --repo.
 In a linked git worktree, init instead mirrors the main checkout's .llm — it
 links to wherever the primary worktree's .llm points (or to its real .llm dir) —
 so every worktree of a repo shares one scratch+status tree and tools rooted at
-the main .llm (e.g. a daemon) see work done in any worktree. Pass --repo or
---name to opt out and force a distinct bucket.`,
+the main .llm (e.g. a daemon) see work done in any worktree. Pass any explicit
+root selector (--repo, --project, --date, or --name) to force a distinct bucket.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			task := name

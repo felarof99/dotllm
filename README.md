@@ -115,4 +115,4 @@ your tmux or shell config itself — copy what you want.
   bucket. Use `--repo` to disambiguate.
 - Each git **worktree** resolves to its own toplevel basename, so worktrees get
   separate buckets by default; `--repo` groups them.
-- Add `.llm/` to your project's `.gitignore` if you don't want the symlink tracked.
+- Add `.llm` to your project's `.gitignore` if you don't want the symlink tracked.
