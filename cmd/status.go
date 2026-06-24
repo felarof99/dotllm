@@ -35,7 +35,7 @@ func runStatus(a *app, in statusArgs) error {
 	if err != nil {
 		return err
 	}
-	r, err := a.resolve(dir, "", "")
+	r, err := a.resolve(dir, "", "", "")
 	if err != nil {
 		return err
 	}
