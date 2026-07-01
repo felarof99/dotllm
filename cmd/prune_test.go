@@ -82,7 +82,7 @@ func TestPruneYesRemovesEmptyTaskAndParents(t *testing.T) {
 	if err := os.MkdirAll(emptyTask, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(emptyTask, ".dotllm-task"), nil, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(emptyTask, ".dotllm-task"), []byte("dotllm task workspace v1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -132,6 +132,24 @@ func TestPruneKeepsPlainWorkspaceWithOnlyMarkerNamedFile(t *testing.T) {
 	}
 	if _, err := os.Stat(markerNamedFile); err != nil {
 		t.Errorf("plain marker-named file should make workspace non-empty: %v", err)
+	}
+}
+
+func TestPruneKeepsManualChildDirWithMarkerNamedFile(t *testing.T) {
+	a, _ := testApp(t, t.TempDir(), fakeRepo{repo: "app"})
+	markerNamedFile := filepath.Join(a.root, "2026-06-14", "app", "fix", ".dotllm-task")
+	if err := os.MkdirAll(filepath.Dir(markerNamedFile), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(markerNamedFile, []byte("real content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runCmd(a, "prune", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(markerNamedFile); err != nil {
+		t.Errorf("manual child marker-named file should not be pruned as a task marker: %v", err)
 	}
 }
 

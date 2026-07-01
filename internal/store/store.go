@@ -3,6 +3,7 @@
 package store
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -13,6 +14,10 @@ import (
 // The marker is ignored when counting files so empty task workspaces remain
 // prunable.
 const TaskMarkerName = ".dotllm-task"
+
+const taskMarkerPayload = "dotllm task workspace v1\n"
+
+var errTaskMarkerConflict = errors.New("already exists with non-dotllm content")
 
 // Root resolves the archive root as an absolute path: $DOTLLM_HOME (with a
 // leading ~ expanded) if set, otherwise <home>/.llm. An absolute result is
@@ -60,19 +65,39 @@ func EnsureTaskMarker(path string) error {
 	marker := filepath.Join(path, TaskMarkerName)
 	f, err := os.OpenFile(marker, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if os.IsExist(err) {
-		fi, statErr := os.Lstat(marker)
-		if statErr != nil {
-			return statErr
-		}
-		if !fi.Mode().IsRegular() {
-			return err
-		}
-		return nil
+		return validateTaskMarker(marker)
 	}
 	if err != nil {
 		return err
 	}
-	return f.Close()
+	if _, err := f.WriteString(taskMarkerPayload); err != nil {
+		f.Close()
+		_ = os.Remove(marker)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(marker)
+		return err
+	}
+	return nil
+}
+
+func validateTaskMarker(marker string) error {
+	fi, err := os.Lstat(marker)
+	if err != nil {
+		return err
+	}
+	if !fi.Mode().IsRegular() {
+		return &os.PathError{Op: "mark task", Path: marker, Err: os.ErrExist}
+	}
+	data, err := os.ReadFile(marker)
+	if err != nil {
+		return err
+	}
+	if string(data) != taskMarkerPayload {
+		return &os.PathError{Op: "mark task", Path: marker, Err: errTaskMarkerConflict}
+	}
+	return nil
 }
 
 // Workspace is one scratch directory inside the archive.
@@ -208,8 +233,7 @@ func scanDateRepo(repoDir, date, repo string) ([]Workspace, error) {
 }
 
 func hasTaskMarker(dir string) bool {
-	fi, err := os.Lstat(filepath.Join(dir, TaskMarkerName))
-	return err == nil && fi.Mode().IsRegular()
+	return validateTaskMarker(filepath.Join(dir, TaskMarkerName)) == nil
 }
 
 func scanLegacyRepo(repoDir, repo string) ([]Workspace, error) {

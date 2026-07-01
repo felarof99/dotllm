@@ -43,7 +43,7 @@ func TestScanDateFirstGroupsAndCounts(t *testing.T) {
 	mustWrite(t, filepath.Join(root, "2026-06-14", "app", "b.md"), "b")
 	// 2026-06-14/web/fix with 1 file
 	mustWrite(t, filepath.Join(root, "2026-06-14", "web", "fix", "c.md"), "c")
-	mustWrite(t, filepath.Join(root, "2026-06-14", "web", "fix", ".dotllm-task"), "")
+	mustWrite(t, filepath.Join(root, "2026-06-14", "web", "fix", ".dotllm-task"), "dotllm task workspace v1\n")
 	// 2026-06-13/web with 0 files (empty dir)
 	if err := os.MkdirAll(filepath.Join(root, "2026-06-13", "web"), 0o755); err != nil {
 		t.Fatal(err)
@@ -132,6 +132,23 @@ func TestScanRequiresRegularTaskMarker(t *testing.T) {
 	}
 	if wss[0].Name != "app" || wss[0].Task != "" || wss[0].Files != 1 {
 		t.Errorf("workspace = %+v, want symlink marker counted as plain content", wss[0])
+	}
+}
+
+func TestScanRequiresOwnedTaskMarkerPayload(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "2026-06-14", "app", "fix", ".dotllm-task"), "real content")
+
+	groups, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wss := groups[0].Workspaces
+	if len(wss) != 1 {
+		t.Fatalf("workspaces = %+v, want plain app workspace", wss)
+	}
+	if wss[0].Name != "app" || wss[0].Task != "" || wss[0].Files != 1 {
+		t.Errorf("workspace = %+v, want marker-named user file counted as plain content", wss[0])
 	}
 }
 

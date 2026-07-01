@@ -239,3 +239,29 @@ func TestInitForeignSymlinkNeedsForce(t *testing.T) {
 		t.Errorf("after force, target = %q, want %q", got, want)
 	}
 }
+
+func TestInitTaskRejectsAdoptedMarkerNamedContent(t *testing.T) {
+	wd := t.TempDir()
+	local := filepath.Join(wd, ".llm")
+	if err := os.MkdirAll(local, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(local, ".dotllm-task"), []byte("real content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a, _ := testApp(t, wd, fakeRepo{repo: "app"})
+
+	if err := runCmd(a, "init", "fix"); err == nil {
+		t.Fatal("task init should reject adopted marker-named user content")
+	}
+	archiveMarker := filepath.Join(a.root, "2026-06-14", "app", "fix", ".dotllm-task")
+	if got, err := os.ReadFile(archiveMarker); err != nil || string(got) != "real content" {
+		t.Fatalf("adopted marker-named content should remain in archive, got %q err %v", got, err)
+	}
+	if err := runCmd(a, "prune", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(archiveMarker); err != nil || string(got) != "real content" {
+		t.Fatalf("prune should keep marker-named user content, got %q err %v", got, err)
+	}
+}
