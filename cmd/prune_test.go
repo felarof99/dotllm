@@ -9,7 +9,7 @@ import (
 
 func TestPrunePreviewsByDefault(t *testing.T) {
 	a, buf := testApp(t, t.TempDir(), fakeRepo{repo: "app"})
-	empty := filepath.Join(a.root, "app", "2026-06-14")
+	empty := filepath.Join(a.root, "2026-06-14", "app")
 	if err := os.MkdirAll(empty, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -26,8 +26,8 @@ func TestPrunePreviewsByDefault(t *testing.T) {
 
 func TestPruneYesRemovesEmptyKeepsNonEmpty(t *testing.T) {
 	a, buf := testApp(t, t.TempDir(), fakeRepo{repo: "app"})
-	empty := filepath.Join(a.root, "app", "2026-06-14")
-	full := filepath.Join(a.root, "web", "2026-06-10")
+	empty := filepath.Join(a.root, "2026-06-14", "app")
+	full := filepath.Join(a.root, "2026-06-10", "web")
 	if err := os.MkdirAll(empty, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -44,9 +44,9 @@ func TestPruneYesRemovesEmptyKeepsNonEmpty(t *testing.T) {
 	if _, err := os.Stat(empty); !os.IsNotExist(err) {
 		t.Errorf("empty workspace should be gone: %v", err)
 	}
-	// now-empty repo parent removed too
-	if _, err := os.Stat(filepath.Join(a.root, "app")); !os.IsNotExist(err) {
-		t.Errorf("empty repo parent should be gone")
+	// now-empty date parent removed too
+	if _, err := os.Stat(filepath.Join(a.root, "2026-06-14")); !os.IsNotExist(err) {
+		t.Errorf("empty date parent should be gone")
 	}
 	// non-empty workspace untouched
 	if _, err := os.Stat(filepath.Join(full, "note.md")); err != nil {
@@ -61,7 +61,7 @@ func TestPruneKeepsSymlinkOnlyWorkspace(t *testing.T) {
 	// Finding 3: a workspace whose only content is a symlink is NOT empty and
 	// must not be deleted.
 	a, _ := testApp(t, t.TempDir(), fakeRepo{repo: "app"})
-	ws := filepath.Join(a.root, "app", "2026-06-14_links")
+	ws := filepath.Join(a.root, "2026-06-14", "app")
 	if err := os.MkdirAll(ws, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -73,6 +73,101 @@ func TestPruneKeepsSymlinkOnlyWorkspace(t *testing.T) {
 	}
 	if _, err := os.Lstat(filepath.Join(ws, "ref")); err != nil {
 		t.Errorf("symlink-only workspace must survive prune: %v", err)
+	}
+}
+
+func TestPruneYesRemovesEmptyTaskAndParents(t *testing.T) {
+	a, _ := testApp(t, t.TempDir(), fakeRepo{repo: "app"})
+	emptyTask := filepath.Join(a.root, "2026-06-14", "app", "fix")
+	if err := os.MkdirAll(emptyTask, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(emptyTask, ".dotllm-task"), []byte("dotllm task workspace v1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runCmd(a, "prune", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(emptyTask); !os.IsNotExist(err) {
+		t.Errorf("empty task workspace should be gone: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(a.root, "2026-06-14")); !os.IsNotExist(err) {
+		t.Errorf("empty date parent should be gone")
+	}
+}
+
+func TestPruneDoesNotRemovePlainWorkspaceEmptySubdir(t *testing.T) {
+	a, _ := testApp(t, t.TempDir(), fakeRepo{repo: "app"})
+	plain := filepath.Join(a.root, "2026-06-14", "app")
+	emptySubdir := filepath.Join(plain, "emptydir")
+	if err := os.MkdirAll(emptySubdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(plain, "note.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runCmd(a, "prune", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(emptySubdir); err != nil {
+		t.Errorf("ordinary empty subdir should not be pruned as a task: %v", err)
+	}
+}
+
+func TestPruneKeepsPlainWorkspaceWithOnlyMarkerNamedFile(t *testing.T) {
+	a, _ := testApp(t, t.TempDir(), fakeRepo{repo: "app"})
+	plain := filepath.Join(a.root, "2026-06-14", "app")
+	markerNamedFile := filepath.Join(plain, ".dotllm-task")
+	if err := os.MkdirAll(plain, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(markerNamedFile, []byte("real content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runCmd(a, "prune", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(markerNamedFile); err != nil {
+		t.Errorf("plain marker-named file should make workspace non-empty: %v", err)
+	}
+}
+
+func TestPruneKeepsManualChildDirWithMarkerNamedFile(t *testing.T) {
+	a, _ := testApp(t, t.TempDir(), fakeRepo{repo: "app"})
+	markerNamedFile := filepath.Join(a.root, "2026-06-14", "app", "fix", ".dotllm-task")
+	if err := os.MkdirAll(filepath.Dir(markerNamedFile), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(markerNamedFile, []byte("real content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runCmd(a, "prune", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(markerNamedFile); err != nil {
+		t.Errorf("manual child marker-named file should not be pruned as a task marker: %v", err)
+	}
+}
+
+func TestPruneKeepsLegacyRepoFirstCleanup(t *testing.T) {
+	a, _ := testApp(t, t.TempDir(), fakeRepo{repo: "app"})
+	legacy := filepath.Join(a.root, "legacyapp", "2026-06-14")
+	if err := os.MkdirAll(legacy, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runCmd(a, "prune", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(legacy); !os.IsNotExist(err) {
+		t.Errorf("empty legacy workspace should be gone: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(a.root, "legacyapp")); !os.IsNotExist(err) {
+		t.Errorf("empty legacy repo parent should be gone")
 	}
 }
 

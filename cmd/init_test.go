@@ -23,7 +23,7 @@ func TestInitCreatesLinkAndArchive(t *testing.T) {
 	if err := runCmd(a, "init"); err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(a.root, "app", "2026-06-14")
+	want := filepath.Join(a.root, "2026-06-14", "app")
 	if got := linkTarget(t, wd); got != want {
 		t.Errorf("link target = %q, want %q", got, want)
 	}
@@ -42,7 +42,7 @@ func TestInitDefaultsToPlainDateBucket(t *testing.T) {
 	if err := runCmd(a, "init"); err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(a.root, "app", "2026-06-14")
+	want := filepath.Join(a.root, "2026-06-14", "app")
 	if got := linkTarget(t, wd); got != want {
 		t.Errorf("link target = %q, want %q (plain date bucket)", got, want)
 	}
@@ -55,7 +55,7 @@ func TestInitTaskFromNameOrPositional(t *testing.T) {
 		if err := runCmd(a, args...); err != nil {
 			t.Fatal(err)
 		}
-		want := filepath.Join(a.root, "app", "2026-06-14_fix")
+		want := filepath.Join(a.root, "2026-06-14", "app", "fix")
 		if got := linkTarget(t, wd); got != want {
 			t.Errorf("%v: link target = %q, want %q", args, got, want)
 		}
@@ -68,7 +68,7 @@ func TestInitRepoOverride(t *testing.T) {
 	if err := runCmd(a, "init", "--repo", "chosen"); err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(a.root, "chosen", "2026-06-14")
+	want := filepath.Join(a.root, "2026-06-14", "chosen")
 	if got := linkTarget(t, wd); got != want {
 		t.Errorf("link target = %q, want %q", got, want)
 	}
@@ -80,7 +80,7 @@ func TestInitProjectAndDateOverride(t *testing.T) {
 	if err := runCmd(a, "init", "--project", "BrowserOS", "--date", "2026-06-23"); err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(a.root, "BrowserOS", "2026-06-23")
+	want := filepath.Join(a.root, "2026-06-23", "BrowserOS")
 	if got := linkTarget(t, wd); got != want {
 		t.Errorf("link target = %q, want %q", got, want)
 	}
@@ -92,7 +92,7 @@ func TestInitProjectDefaultsToToday(t *testing.T) {
 	if err := runCmd(a, "init", "--project", "BrowserOS"); err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(a.root, "BrowserOS", "2026-06-14")
+	want := filepath.Join(a.root, "2026-06-14", "BrowserOS")
 	if got := linkTarget(t, wd); got != want {
 		t.Errorf("link target = %q, want %q", got, want)
 	}
@@ -133,7 +133,7 @@ func TestInitJSON(t *testing.T) {
 	if err := json.Unmarshal(buf.Bytes(), &res); err != nil {
 		t.Fatalf("json: %v\n%s", err, buf.String())
 	}
-	if !res.Linked || res.Canonical != filepath.Join(a.root, "app", "2026-06-14") {
+	if !res.Linked || res.Canonical != filepath.Join(a.root, "2026-06-14", "app") {
 		t.Errorf("res = %+v", res)
 	}
 }
@@ -191,7 +191,7 @@ func TestInitWorktreeMirrorsManagedMain(t *testing.T) {
 	mainRoot := t.TempDir()
 	wt := t.TempDir()
 	a, _ := testApp(t, wt, fakeRepo{repo: "skl", mainRoot: mainRoot, isWorktree: true})
-	managed := filepath.Join(a.root, "skl", "2026-06-14")
+	managed := filepath.Join(a.root, "2026-06-14", "skl")
 	if err := os.MkdirAll(managed, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func TestInitWorktreeFallsBackWhenMainAbsent(t *testing.T) {
 	if err := runCmd(a, "init"); err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(a.root, "skl", "2026-06-14")
+	want := filepath.Join(a.root, "2026-06-14", "skl")
 	if got := linkTarget(t, wt); got != want {
 		t.Errorf("worktree .llm -> %q, want fallback bucket %q", got, want)
 	}
@@ -234,8 +234,34 @@ func TestInitForeignSymlinkNeedsForce(t *testing.T) {
 	if err := runCmd(a, "init", "--force"); err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(a.root, "app", "2026-06-14")
+	want := filepath.Join(a.root, "2026-06-14", "app")
 	if got := linkTarget(t, wd); got != want {
 		t.Errorf("after force, target = %q, want %q", got, want)
+	}
+}
+
+func TestInitTaskRejectsAdoptedMarkerNamedContent(t *testing.T) {
+	wd := t.TempDir()
+	local := filepath.Join(wd, ".llm")
+	if err := os.MkdirAll(local, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(local, ".dotllm-task"), []byte("real content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a, _ := testApp(t, wd, fakeRepo{repo: "app"})
+
+	if err := runCmd(a, "init", "fix"); err == nil {
+		t.Fatal("task init should reject adopted marker-named user content")
+	}
+	archiveMarker := filepath.Join(a.root, "2026-06-14", "app", "fix", ".dotllm-task")
+	if got, err := os.ReadFile(archiveMarker); err != nil || string(got) != "real content" {
+		t.Fatalf("adopted marker-named content should remain in archive, got %q err %v", got, err)
+	}
+	if err := runCmd(a, "prune", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(archiveMarker); err != nil || string(got) != "real content" {
+		t.Fatalf("prune should keep marker-named user content, got %q err %v", got, err)
 	}
 }

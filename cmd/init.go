@@ -24,16 +24,16 @@ func newInitCmd(a *app) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init [task]",
 		Short: "Create or re-link this directory's .llm into the home archive",
-		Long: `init ensures ~/.llm/<repo>/<yyyy-mm-dd>[_<task>]/ exists and makes ./.llm a
+		Long: `init ensures ~/.llm/<yyyy-mm-dd>/<repo>[/<task>]/ exists and makes ./.llm a
 symlink to it. It is idempotent, adopts an existing real ./.llm (moving its
 files into the archive without overwriting), and re-attaches if the archive dir
 exists but the local link is gone.
 
-By default the bucket is just <repo>/<date>. Pass a task label (via --name or
-the positional argument) to get a separate <date>_<task> bucket.
+By default the bucket is <date>/<repo>. Pass a task label (via --name or the
+positional argument) to get a separate <date>/<repo>/<task> bucket.
 
 Pass --project <label> and optional --date <YYYY-MM-DD> from multiple agents to
-force the same ~/.llm/<project>/<date> root even when their working directories
+force the same ~/.llm/<date>/<project> root even when their working directories
 or git repos differ. --project is a clearer alias for --repo.
 
 In a linked git worktree, init instead mirrors the main checkout's .llm — it
@@ -63,7 +63,7 @@ root selector (--repo, --project, --date, or --name) to force a distinct bucket.
 	}
 
 	f := cmd.Flags()
-	f.StringVarP(&name, "name", "n", "", "task label (default: none — a plain <date> bucket)")
+	f.StringVarP(&name, "name", "n", "", "task label (default: none — a plain <date>/<repo> bucket)")
 	f.StringVar(&repoOverride, "repo", "", "override the auto-detected repo name")
 	f.StringVar(&projectOverride, "project", "", "shared high-level project label (alias for --repo)")
 	f.StringVar(&dateOverride, "date", "", "archive date bucket (YYYY-MM-DD; default: today)")
@@ -122,6 +122,11 @@ func runInit(a *app, in initArgs) error {
 	res, err := workspace.Init(workspace.InitOptions{Dir: dir, Canonical: canonical, Force: in.force})
 	if err != nil {
 		return err
+	}
+	if r.Task != "" {
+		if err := store.EnsureTaskMarker(canonical); err != nil {
+			return err
+		}
 	}
 	return reportInit(a, in, res)
 }

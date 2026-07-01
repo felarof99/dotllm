@@ -63,6 +63,66 @@ func TestHelpListsCommands(t *testing.T) {
 	}
 }
 
+func TestRootHelpDescribesDateFirstArchive(t *testing.T) {
+	a, buf := testApp(t, t.TempDir(), fakeRepo{repo: "app"})
+	if err := runCmd(a, "--help"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "~/.llm/<yyyy-mm-dd>/<repo>[/<task>]/") {
+		t.Errorf("help should describe date-first archive layout:\n%s", buf.String())
+	}
+}
+
+func TestInitHelpDescribesDateFirstArchive(t *testing.T) {
+	a, buf := testApp(t, t.TempDir(), fakeRepo{repo: "app"})
+	if err := runCmd(a, "init", "--help"); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		"~/.llm/<yyyy-mm-dd>/<repo>[/<task>]/",
+		"By default the bucket is <date>/<repo>",
+		"plain <date>/<repo> bucket",
+		"<date>/<repo>/<task>",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("init help missing %q\n%s", want, out)
+		}
+	}
+}
+
+func TestListAndPruneHelpDescribeDateFirstAndLegacy(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{
+			name: "list",
+			args: []string{"list", "--help"},
+			want: []string{"grouped by recent date", "legacy repo-first archives"},
+		},
+		{
+			name: "prune",
+			args: []string{"prune", "--help"},
+			want: []string{"date/repo parents", "legacy repo-first archives"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a, buf := testApp(t, t.TempDir(), fakeRepo{repo: "app"})
+			if err := runCmd(a, tt.args...); err != nil {
+				t.Fatal(err)
+			}
+			for _, want := range tt.want {
+				if !strings.Contains(buf.String(), want) {
+					t.Errorf("help missing %q\n%s", want, buf.String())
+				}
+			}
+		})
+	}
+}
+
 func TestUnknownCommandErrors(t *testing.T) {
 	a, _ := testApp(t, t.TempDir(), fakeRepo{repo: "app"})
 	if err := runCmd(a, "bogus"); err == nil {

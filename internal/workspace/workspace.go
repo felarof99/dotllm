@@ -99,7 +99,7 @@ func evalSymlinks(p string) string {
 // InitOptions configures Init.
 type InitOptions struct {
 	Dir       string // working directory whose .llm to manage
-	Canonical string // ~/.llm/<repo>/<date>[_task] (absolute)
+	Canonical string // ~/.llm/<date>/<repo>[/task] (absolute)
 	Force     bool   // re-point a .llm symlink that points elsewhere
 }
 

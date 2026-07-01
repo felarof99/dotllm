@@ -48,7 +48,7 @@ func newRootCmdWithApp(a *app) *cobra.Command {
 		Use:   "dotllm",
 		Short: "Mirror a project's .llm/ into a central home archive via symlink",
 		Long: `dotllm makes a project's .llm/ a symlink into a central archive at
-~/.llm/<repo>/<yyyy-mm-dd>[_<task>]/, so agent scratch files auto-track centrally
+~/.llm/<yyyy-mm-dd>/<repo>[/<task>]/, so agent scratch files auto-track centrally
 and survive a deleted checkout.
 
 Run "dotllm init" in any directory; it is idempotent, so it is safe to fire on
