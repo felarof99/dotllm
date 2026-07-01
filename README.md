@@ -9,7 +9,7 @@ auto-track centrally and survive a deleted checkout.
 `dotllm` makes a project's `.llm/` a **symlink** into a home archive:
 
 ```
-project/.llm  ->  ~/.llm/<repo>/<yyyy-mm-dd>[_<task>]/
+project/.llm  ->  ~/.llm/<yyyy-mm-dd>/<repo>[/<task>]/
 ```
 
 The **home copy is the source of truth**. Because `.llm/` is a symlink, writing
@@ -18,18 +18,18 @@ instant and copy-free, and removing the local symlink never loses data.
 
 ### How the path is built
 
+- **`<yyyy-mm-dd>`** — today's date. ISO format so the archive sorts by time.
+  Override with `--date YYYY-MM-DD` when multiple agents need to pin the same
+  workspace root.
 - **`<repo>`** — basename of the git toplevel (`git rev-parse --show-toplevel`),
   or the current directory's basename when you're not in a git work tree.
   Override with `--repo`, or use `--project` when you want a shared high-level
   label that is not tied to the checkout name.
-- **`<yyyy-mm-dd>`** — today's date. ISO format so the archive sorts by time.
-  Override with `--date YYYY-MM-DD` when multiple agents need to pin the same
-  workspace root.
 - **`<task>`** — optional, omitted by default. Pass a label via `--name` or the
-  positional argument to get a separate `<date>_<task>` bucket — handy when you
+  positional argument to get a separate `<date>/<repo>/<task>` bucket — handy when you
   run several distinct tasks in one repo on one day.
 
-By default the bucket is just `<repo>/<date>`, so every pane you open in a repo
+By default the bucket is just `<date>/<repo>`, so every pane you open in a repo
 on the same day shares one workspace and auto-init (below) creates at most one
 empty dir per repo/day — `dotllm prune` cleans those up.
 
@@ -40,7 +40,12 @@ project/date pair:
 dotllm init --project BrowserOS --date 2026-06-23
 ```
 
-Both agents will link `./.llm` to `~/.llm/BrowserOS/2026-06-23/`.
+Both agents will link `./.llm` to `~/.llm/2026-06-23/BrowserOS/`.
+
+Archives created by older `dotllm` versions used the repo-first layout
+`~/.llm/<repo>/<yyyy-mm-dd>[_<task>]/`. `dotllm` does not migrate those
+directories automatically. `dotllm list` still shows them in a legacy section,
+and `dotllm prune` can still remove empty legacy workspaces.
 
 ## Install
 
@@ -65,10 +70,10 @@ dotllm init [task]     Create/re-link this dir's .llm into the archive.
 dotllm status          Show where ./.llm points: managed / not initialized /
                        dangling / foreign.  --json for machine output.
 
-dotllm list [substr]   Browse the archive, grouped by repo, with file counts.
+dotllm list [substr]   Browse the archive, grouped by recent date, with file counts.
                        Optional case-insensitive repo-substring filter.  --json.
 
-dotllm prune           Remove empty workspace dirs (and now-empty repo parents).
+dotllm prune           Remove empty workspace dirs (and now-empty date/repo parents).
                        Safe by default: previews unless --yes.  --dry-run, --json.
 
 dotllm                 With no arguments, prints status.

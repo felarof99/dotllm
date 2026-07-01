@@ -63,6 +63,33 @@ func TestHelpListsCommands(t *testing.T) {
 	}
 }
 
+func TestRootHelpDescribesDateFirstArchive(t *testing.T) {
+	a, buf := testApp(t, t.TempDir(), fakeRepo{repo: "app"})
+	if err := runCmd(a, "--help"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "~/.llm/<yyyy-mm-dd>/<repo>[/<task>]/") {
+		t.Errorf("help should describe date-first archive layout:\n%s", buf.String())
+	}
+}
+
+func TestInitHelpDescribesDateFirstArchive(t *testing.T) {
+	a, buf := testApp(t, t.TempDir(), fakeRepo{repo: "app"})
+	if err := runCmd(a, "init", "--help"); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		"~/.llm/<yyyy-mm-dd>/<repo>[/<task>]/",
+		"By default the bucket is <date>/<repo>",
+		"<date>/<repo>/<task>",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("init help missing %q\n%s", want, out)
+		}
+	}
+}
+
 func TestUnknownCommandErrors(t *testing.T) {
 	a, _ := testApp(t, t.TempDir(), fakeRepo{repo: "app"})
 	if err := runCmd(a, "bogus"); err == nil {
