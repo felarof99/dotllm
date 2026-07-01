@@ -116,6 +116,25 @@ func TestPruneDoesNotRemovePlainWorkspaceEmptySubdir(t *testing.T) {
 	}
 }
 
+func TestPruneKeepsPlainWorkspaceWithOnlyMarkerNamedFile(t *testing.T) {
+	a, _ := testApp(t, t.TempDir(), fakeRepo{repo: "app"})
+	plain := filepath.Join(a.root, "2026-06-14", "app")
+	markerNamedFile := filepath.Join(plain, ".dotllm-task")
+	if err := os.MkdirAll(plain, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(markerNamedFile, []byte("real content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runCmd(a, "prune", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(markerNamedFile); err != nil {
+		t.Errorf("plain marker-named file should make workspace non-empty: %v", err)
+	}
+}
+
 func TestPruneKeepsLegacyRepoFirstCleanup(t *testing.T) {
 	a, _ := testApp(t, t.TempDir(), fakeRepo{repo: "app"})
 	legacy := filepath.Join(a.root, "legacyapp", "2026-06-14")

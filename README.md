@@ -57,7 +57,7 @@ make install      # builds to $(go env GOPATH)/bin/dotllm
 
 ```
 dotllm init [task]     Create/re-link this dir's .llm into the archive.
-                       -n, --name <task>   task label (default: none -> plain <date> bucket)
+	                       -n, --name <task>   task label (default: none -> plain <date>/<repo> bucket)
                            --repo <name>   override the detected repo name
                            --project <label>
                                            shared high-level project label (alias for --repo)

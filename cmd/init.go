@@ -63,7 +63,7 @@ root selector (--repo, --project, --date, or --name) to force a distinct bucket.
 	}
 
 	f := cmd.Flags()
-	f.StringVarP(&name, "name", "n", "", "task label (default: none — a plain <date> bucket)")
+	f.StringVarP(&name, "name", "n", "", "task label (default: none — a plain <date>/<repo> bucket)")
 	f.StringVar(&repoOverride, "repo", "", "override the auto-detected repo name")
 	f.StringVar(&projectOverride, "project", "", "shared high-level project label (alias for --repo)")
 	f.StringVar(&dateOverride, "date", "", "archive date bucket (YYYY-MM-DD; default: today)")

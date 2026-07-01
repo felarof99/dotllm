@@ -95,6 +95,46 @@ func TestScanDoesNotTreatUnmarkedChildDirsAsTasks(t *testing.T) {
 	}
 }
 
+func TestScanCountsMarkerNamedFilesOutsideTaskRoot(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "2026-06-14", "app", ".dotllm-task"), "real content")
+
+	groups, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wss := groups[0].Workspaces
+	if len(wss) != 1 {
+		t.Fatalf("workspaces = %+v, want plain app workspace", wss)
+	}
+	if wss[0].Files != 1 {
+		t.Errorf("workspace files = %d, want marker-named file counted", wss[0].Files)
+	}
+}
+
+func TestScanRequiresRegularTaskMarker(t *testing.T) {
+	root := t.TempDir()
+	taskDir := filepath.Join(root, "2026-06-14", "app", "fix")
+	if err := os.MkdirAll(taskDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("/some/target", filepath.Join(taskDir, ".dotllm-task")); err != nil {
+		t.Fatal(err)
+	}
+
+	groups, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wss := groups[0].Workspaces
+	if len(wss) != 1 {
+		t.Fatalf("workspaces = %+v, want plain app workspace", wss)
+	}
+	if wss[0].Name != "app" || wss[0].Task != "" || wss[0].Files != 1 {
+		t.Errorf("workspace = %+v, want symlink marker counted as plain content", wss[0])
+	}
+}
+
 func TestScanKeepsLegacyRepoFirstArchivesVisible(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, filepath.Join(root, "2026-06-14", "app", "a.md"), "a")

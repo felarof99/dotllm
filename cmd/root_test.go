@@ -82,6 +82,7 @@ func TestInitHelpDescribesDateFirstArchive(t *testing.T) {
 	for _, want := range []string{
 		"~/.llm/<yyyy-mm-dd>/<repo>[/<task>]/",
 		"By default the bucket is <date>/<repo>",
+		"plain <date>/<repo> bucket",
 		"<date>/<repo>/<task>",
 	} {
 		if !strings.Contains(out, want) {

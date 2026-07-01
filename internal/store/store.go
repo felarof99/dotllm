@@ -64,7 +64,7 @@ func EnsureTaskMarker(path string) error {
 		if statErr != nil {
 			return statErr
 		}
-		if fi.IsDir() {
+		if !fi.Mode().IsRegular() {
 			return err
 		}
 		return nil
@@ -191,7 +191,7 @@ func scanDateRepo(repoDir, date, repo string) ([]Workspace, error) {
 	}
 	for _, d := range taskDirs {
 		path := filepath.Join(repoDir, d.Name())
-		n, err := countFiles(path)
+		n, err := countTaskFiles(path)
 		if err != nil {
 			return nil, err
 		}
@@ -209,7 +209,7 @@ func scanDateRepo(repoDir, date, repo string) ([]Workspace, error) {
 
 func hasTaskMarker(dir string) bool {
 	fi, err := os.Lstat(filepath.Join(dir, TaskMarkerName))
-	return err == nil && !fi.IsDir()
+	return err == nil && fi.Mode().IsRegular()
 }
 
 func scanLegacyRepo(repoDir, repo string) ([]Workspace, error) {
@@ -269,10 +269,18 @@ func sortLegacy(wss []Workspace) {
 // under dir. Symlinks count so prune never treats a workspace holding curated
 // links as "empty" and deletes them.
 func countFiles(dir string) (int, error) {
-	return countFilesSkippingDirs(dir, nil)
+	return countFilesSkipping(dir, nil, "")
+}
+
+func countTaskFiles(dir string) (int, error) {
+	return countFilesSkipping(dir, nil, filepath.Clean(filepath.Join(dir, TaskMarkerName)))
 }
 
 func countFilesSkippingDirs(dir string, skipDirs map[string]bool) (int, error) {
+	return countFilesSkipping(dir, skipDirs, "")
+}
+
+func countFilesSkipping(dir string, skipDirs map[string]bool, ignoredFile string) (int, error) {
 	n := 0
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -281,7 +289,7 @@ func countFilesSkippingDirs(dir string, skipDirs map[string]bool) (int, error) {
 		if d.IsDir() && path != dir && skipDirs[filepath.Clean(path)] {
 			return filepath.SkipDir
 		}
-		if d.Name() == TaskMarkerName {
+		if ignoredFile != "" && filepath.Clean(path) == ignoredFile {
 			return nil
 		}
 		if !d.IsDir() {
