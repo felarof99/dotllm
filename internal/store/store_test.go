@@ -28,10 +28,10 @@ func TestRootHonorsEnvAndExpandsTilde(t *testing.T) {
 
 func TestWorkspacePath(t *testing.T) {
 	root := "/r"
-	if got := WorkspacePath(root, "app", "2026-06-14", ""); got != "/r/app/2026-06-14" {
+	if got := WorkspacePath(root, "app", "2026-06-14", ""); got != "/r/2026-06-14/app" {
 		t.Errorf("WorkspacePath no task = %q", got)
 	}
-	if got := WorkspacePath(root, "app", "2026-06-14", "fix"); got != "/r/app/2026-06-14_fix" {
+	if got := WorkspacePath(root, "app", "2026-06-14", "fix"); got != "/r/2026-06-14/app/fix" {
 		t.Errorf("WorkspacePath with task = %q", got)
 	}
 }

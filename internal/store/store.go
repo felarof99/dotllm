@@ -1,5 +1,5 @@
 // Package store owns the central home archive: where its root lives, how a
-// repo/date/task maps to a canonical workspace path, and how to scan it.
+// date/repo/task maps to a canonical workspace path, and how to scan it.
 package store
 
 import (
@@ -42,17 +42,12 @@ func expandTilde(p string) (string, error) {
 	return p, nil
 }
 
-// DirName builds the workspace directory name: "<date>" or "<date>_<task>".
-func DirName(date, task string) string {
-	if task == "" {
-		return date
-	}
-	return date + "_" + task
-}
-
-// WorkspacePath returns the canonical absolute path for a repo/date/task under root.
+// WorkspacePath returns the canonical absolute path for a date/repo/task under root.
 func WorkspacePath(root, repo, date, task string) string {
-	return filepath.Join(root, repo, DirName(date, task))
+	if task == "" {
+		return filepath.Join(root, date, repo)
+	}
+	return filepath.Join(root, date, repo, task)
 }
 
 // Workspace is one dated scratch directory inside the archive.
