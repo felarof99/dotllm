@@ -50,70 +50,186 @@ func WorkspacePath(root, repo, date, task string) string {
 	return filepath.Join(root, date, repo, task)
 }
 
-// Workspace is one dated scratch directory inside the archive.
+// Workspace is one scratch directory inside the archive.
 type Workspace struct {
-	Repo  string `json:"repo"`
-	Name  string `json:"name"`           // "<date>" or "<date>_<task>"
-	Date  string `json:"date"`           // "" if Name is not date-prefixed
-	Task  string `json:"task,omitempty"` // "" when there is no task label
-	Path  string `json:"path"`
-	Files int    `json:"files"` // non-directory entries (files + symlinks), counted recursively
+	Repo   string `json:"repo"`
+	Name   string `json:"name"`           // "<repo>", "<repo>/<task>", or legacy "<repo>/<date>[_<task>]"
+	Date   string `json:"date"`           // YYYY-MM-DD
+	Task   string `json:"task,omitempty"` // "" when there is no task label
+	Path   string `json:"path"`
+	Files  int    `json:"files"` // non-directory entries (files + symlinks), counted recursively
+	Legacy bool   `json:"legacy,omitempty"`
 }
 
-// RepoGroup is the set of workspaces for one repo.
-type RepoGroup struct {
-	Repo       string      `json:"repo"`
+// DateGroup is the set of workspaces for one date. Legacy repo-first archives
+// are returned in a trailing group with Legacy=true.
+type DateGroup struct {
+	Date       string      `json:"date,omitempty"`
+	Legacy     bool        `json:"legacy,omitempty"`
 	Workspaces []Workspace `json:"workspaces"`
 }
 
-// Scan reads the archive under root and returns workspaces grouped by repo,
-// sorted by repo then workspace name. A missing root yields no groups (no error).
-func Scan(root string) ([]RepoGroup, error) {
-	repos, err := os.ReadDir(root)
+// Scan reads the archive under root and returns date-first workspaces grouped by
+// date descending. Legacy repo-first archives are still surfaced in a trailing
+// group so old data remains visible and prunable. A missing root yields no
+// groups (no error).
+func Scan(root string) ([]DateGroup, error) {
+	entries, err := os.ReadDir(root)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	var groups []RepoGroup
+	var groups []DateGroup
+	var legacy []Workspace
+	for _, re := range entries {
+		if !re.IsDir() {
+			continue
+		}
+		path := filepath.Join(root, re.Name())
+		if looksLikeDate(re.Name()) {
+			wss, err := scanDateFirstGroup(path, re.Name())
+			if err != nil {
+				return nil, err
+			}
+			if len(wss) > 0 {
+				groups = append(groups, DateGroup{Date: re.Name(), Workspaces: wss})
+			}
+			continue
+		}
+		wss, err := scanLegacyRepo(path, re.Name())
+		if err != nil {
+			return nil, err
+		}
+		legacy = append(legacy, wss...)
+	}
+	sort.Slice(groups, func(i, j int) bool { return groups[i].Date > groups[j].Date })
+	sortLegacy(legacy)
+	if len(legacy) > 0 {
+		groups = append(groups, DateGroup{Legacy: true, Workspaces: legacy})
+	}
+	return groups, nil
+}
+
+func scanDateFirstGroup(dateDir, date string) ([]Workspace, error) {
+	repos, err := os.ReadDir(dateDir)
+	if err != nil {
+		return nil, err
+	}
+	var wss []Workspace
 	for _, re := range repos {
 		if !re.IsDir() {
 			continue
 		}
-		repoDir := filepath.Join(root, re.Name())
-		entries, err := os.ReadDir(repoDir)
+		got, err := scanDateRepo(filepath.Join(dateDir, re.Name()), date, re.Name())
 		if err != nil {
 			return nil, err
 		}
-		var wss []Workspace
-		for _, e := range entries {
-			if !e.IsDir() {
-				continue
-			}
-			path := filepath.Join(repoDir, e.Name())
-			n, err := countFiles(path)
-			if err != nil {
-				return nil, err
-			}
-			date, task := splitName(e.Name())
-			wss = append(wss, Workspace{
-				Repo:  re.Name(),
-				Name:  e.Name(),
-				Date:  date,
-				Task:  task,
-				Path:  path,
-				Files: n,
-			})
-		}
-		if len(wss) == 0 {
+		wss = append(wss, got...)
+	}
+	sortWorkspaces(wss)
+	return wss, nil
+}
+
+func scanDateRepo(repoDir, date, repo string) ([]Workspace, error) {
+	entries, err := os.ReadDir(repoDir)
+	if err != nil {
+		return nil, err
+	}
+	var dirs []os.DirEntry
+	hasDirectFile := false
+	for _, e := range entries {
+		if e.IsDir() {
+			dirs = append(dirs, e)
 			continue
 		}
-		sort.Slice(wss, func(i, j int) bool { return wss[i].Name < wss[j].Name })
-		groups = append(groups, RepoGroup{Repo: re.Name(), Workspaces: wss})
+		hasDirectFile = true
 	}
-	sort.Slice(groups, func(i, j int) bool { return groups[i].Repo < groups[j].Repo })
-	return groups, nil
+
+	var wss []Workspace
+	if len(entries) == 0 || hasDirectFile {
+		n, err := countFiles(repoDir)
+		if err != nil {
+			return nil, err
+		}
+		wss = append(wss, Workspace{
+			Repo:  repo,
+			Name:  repo,
+			Date:  date,
+			Path:  repoDir,
+			Files: n,
+		})
+	}
+	for _, d := range dirs {
+		path := filepath.Join(repoDir, d.Name())
+		n, err := countFiles(path)
+		if err != nil {
+			return nil, err
+		}
+		wss = append(wss, Workspace{
+			Repo:  repo,
+			Name:  repo + "/" + d.Name(),
+			Date:  date,
+			Task:  d.Name(),
+			Path:  path,
+			Files: n,
+		})
+	}
+	return wss, nil
+}
+
+func scanLegacyRepo(repoDir, repo string) ([]Workspace, error) {
+	entries, err := os.ReadDir(repoDir)
+	if err != nil {
+		return nil, err
+	}
+	var wss []Workspace
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		date, task := splitName(e.Name())
+		if date == "" {
+			continue
+		}
+		path := filepath.Join(repoDir, e.Name())
+		n, err := countFiles(path)
+		if err != nil {
+			return nil, err
+		}
+		wss = append(wss, Workspace{
+			Repo:   repo,
+			Name:   repo + "/" + e.Name(),
+			Date:   date,
+			Task:   task,
+			Path:   path,
+			Files:  n,
+			Legacy: true,
+		})
+	}
+	return wss, nil
+}
+
+func sortWorkspaces(wss []Workspace) {
+	sort.Slice(wss, func(i, j int) bool {
+		if wss[i].Repo != wss[j].Repo {
+			return wss[i].Repo < wss[j].Repo
+		}
+		return wss[i].Task < wss[j].Task
+	})
+}
+
+func sortLegacy(wss []Workspace) {
+	sort.Slice(wss, func(i, j int) bool {
+		if wss[i].Date != wss[j].Date {
+			return wss[i].Date > wss[j].Date
+		}
+		if wss[i].Repo != wss[j].Repo {
+			return wss[i].Repo < wss[j].Repo
+		}
+		return wss[i].Task < wss[j].Task
+	})
 }
 
 // countFiles counts non-directory entries (regular files and symlinks) anywhere

@@ -33,9 +33,16 @@ func runList(a *app, filter string, jsonOut bool) error {
 	}
 	if filter != "" {
 		lf := strings.ToLower(filter)
-		kept := make([]store.RepoGroup, 0, len(groups))
+		kept := make([]store.DateGroup, 0, len(groups))
 		for _, g := range groups {
-			if strings.Contains(strings.ToLower(g.Repo), lf) {
+			wss := make([]store.Workspace, 0, len(g.Workspaces))
+			for _, w := range g.Workspaces {
+				if strings.Contains(strings.ToLower(w.Repo), lf) {
+					wss = append(wss, w)
+				}
+			}
+			if len(wss) > 0 {
+				g.Workspaces = wss
 				kept = append(kept, g)
 			}
 		}
@@ -44,7 +51,7 @@ func runList(a *app, filter string, jsonOut bool) error {
 
 	if jsonOut {
 		if groups == nil {
-			groups = []store.RepoGroup{}
+			groups = []store.DateGroup{}
 		}
 		return printJSON(a.out, groups)
 	}
@@ -53,7 +60,11 @@ func runList(a *app, filter string, jsonOut bool) error {
 		return nil
 	}
 	for _, g := range groups {
-		fmt.Fprintln(a.out, g.Repo)
+		if g.Legacy {
+			fmt.Fprintln(a.out, "legacy repo-first archives")
+		} else {
+			fmt.Fprintln(a.out, g.Date)
+		}
 		for _, w := range g.Workspaces {
 			fmt.Fprintf(a.out, "  %s  (%d item(s))\n", w.Name, w.Files)
 		}

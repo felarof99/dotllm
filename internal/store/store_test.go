@@ -36,15 +36,15 @@ func TestWorkspacePath(t *testing.T) {
 	}
 }
 
-func TestScanGroupsAndCounts(t *testing.T) {
+func TestScanDateFirstGroupsAndCounts(t *testing.T) {
 	root := t.TempDir()
-	// app/2026-06-14 with 2 files (one nested)
-	mustWrite(t, filepath.Join(root, "app", "2026-06-14", "a.md"), "a")
-	mustWrite(t, filepath.Join(root, "app", "2026-06-14", "sub", "b.md"), "b")
-	// app/2026-06-13_fix with 1 file
-	mustWrite(t, filepath.Join(root, "app", "2026-06-13_fix", "c.md"), "c")
-	// web/2026-06-14 with 0 files (empty dir)
-	if err := os.MkdirAll(filepath.Join(root, "web", "2026-06-14"), 0o755); err != nil {
+	// 2026-06-14/app with 2 files
+	mustWrite(t, filepath.Join(root, "2026-06-14", "app", "a.md"), "a")
+	mustWrite(t, filepath.Join(root, "2026-06-14", "app", "b.md"), "b")
+	// 2026-06-14/web/fix with 1 file
+	mustWrite(t, filepath.Join(root, "2026-06-14", "web", "fix", "c.md"), "c")
+	// 2026-06-13/web with 0 files (empty dir)
+	if err := os.MkdirAll(filepath.Join(root, "2026-06-13", "web"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -52,23 +52,49 @@ func TestScanGroupsAndCounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(groups) != 2 || groups[0].Repo != "app" || groups[1].Repo != "web" {
-		t.Fatalf("groups = %+v, want app then web", groups)
+	if len(groups) != 2 || groups[0].Date != "2026-06-14" || groups[1].Date != "2026-06-13" {
+		t.Fatalf("groups = %+v, want recent date groups first", groups)
 	}
 
-	app := groups[0].Workspaces
-	if len(app) != 2 {
-		t.Fatalf("app workspaces = %d, want 2", len(app))
+	recent := groups[0].Workspaces
+	if len(recent) != 2 {
+		t.Fatalf("recent workspaces = %d, want 2", len(recent))
 	}
-	// sorted by name: 2026-06-13_fix before 2026-06-14
-	if app[0].Name != "2026-06-13_fix" || app[0].Date != "2026-06-13" || app[0].Task != "fix" || app[0].Files != 1 {
-		t.Errorf("app[0] = %+v", app[0])
+	if recent[0].Repo != "app" || recent[0].Name != "app" || recent[0].Task != "" || recent[0].Files != 2 {
+		t.Errorf("recent[0] = %+v", recent[0])
 	}
-	if app[1].Name != "2026-06-14" || app[1].Task != "" || app[1].Files != 2 {
-		t.Errorf("app[1] = %+v", app[1])
+	if recent[1].Repo != "web" || recent[1].Name != "web/fix" || recent[1].Task != "fix" || recent[1].Files != 1 {
+		t.Errorf("recent[1] = %+v", recent[1])
 	}
 	if groups[1].Workspaces[0].Files != 0 {
 		t.Errorf("web workspace files = %d, want 0", groups[1].Workspaces[0].Files)
+	}
+}
+
+func TestScanKeepsLegacyRepoFirstArchivesVisible(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "2026-06-14", "app", "a.md"), "a")
+	mustWrite(t, filepath.Join(root, "legacyapp", "2026-06-13_fix", "c.md"), "c")
+
+	groups, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) != 2 {
+		t.Fatalf("groups = %+v, want current plus legacy groups", groups)
+	}
+	if groups[0].Legacy {
+		t.Fatalf("legacy group should sort after date-first groups: %+v", groups)
+	}
+	if !groups[1].Legacy {
+		t.Fatalf("second group should be legacy: %+v", groups)
+	}
+	legacy := groups[1].Workspaces
+	if len(legacy) != 1 {
+		t.Fatalf("legacy workspaces = %+v, want 1", legacy)
+	}
+	if legacy[0].Repo != "legacyapp" || legacy[0].Date != "2026-06-13" || legacy[0].Task != "fix" || !legacy[0].Legacy {
+		t.Errorf("legacy workspace = %+v", legacy[0])
 	}
 }
 

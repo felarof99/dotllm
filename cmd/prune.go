@@ -64,7 +64,7 @@ func runPrune(a *app, yes, dryRun, jsonOut bool) error {
 		if err := os.RemoveAll(w.Path); err != nil {
 			return err
 		}
-		removeIfEmpty(filepath.Dir(w.Path)) // clean a now-empty repo parent
+		removeEmptyParents(w.Path, a.root)
 		fmt.Fprintf(a.out, "removed %s\n", w.Path)
 	}
 	if !doDelete {
@@ -73,13 +73,19 @@ func runPrune(a *app, yes, dryRun, jsonOut bool) error {
 	return nil
 }
 
-// removeIfEmpty removes dir only when it has no entries. Best-effort.
-func removeIfEmpty(dir string) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return
-	}
-	if len(entries) == 0 {
-		_ = os.Remove(dir)
+// removeEmptyParents removes now-empty parents of path, stopping at root.
+// Best-effort: any read/remove error leaves the remaining ancestors alone.
+func removeEmptyParents(path, root string) {
+	root = filepath.Clean(root)
+	dir := filepath.Dir(filepath.Clean(path))
+	for dir != "." && dir != string(os.PathSeparator) && dir != root {
+		entries, err := os.ReadDir(dir)
+		if err != nil || len(entries) > 0 {
+			return
+		}
+		if err := os.Remove(dir); err != nil {
+			return
+		}
+		dir = filepath.Dir(dir)
 	}
 }
