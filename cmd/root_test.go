@@ -90,6 +90,38 @@ func TestInitHelpDescribesDateFirstArchive(t *testing.T) {
 	}
 }
 
+func TestListAndPruneHelpDescribeDateFirstAndLegacy(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{
+			name: "list",
+			args: []string{"list", "--help"},
+			want: []string{"grouped by recent date", "legacy repo-first archives"},
+		},
+		{
+			name: "prune",
+			args: []string{"prune", "--help"},
+			want: []string{"date/repo parents", "legacy repo-first archives"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a, buf := testApp(t, t.TempDir(), fakeRepo{repo: "app"})
+			if err := runCmd(a, tt.args...); err != nil {
+				t.Fatal(err)
+			}
+			for _, want := range tt.want {
+				if !strings.Contains(buf.String(), want) {
+					t.Errorf("help missing %q\n%s", want, buf.String())
+				}
+			}
+		})
+	}
+}
+
 func TestUnknownCommandErrors(t *testing.T) {
 	a, _ := testApp(t, t.TempDir(), fakeRepo{repo: "app"})
 	if err := runCmd(a, "bogus"); err == nil {

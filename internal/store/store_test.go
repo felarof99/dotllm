@@ -43,6 +43,7 @@ func TestScanDateFirstGroupsAndCounts(t *testing.T) {
 	mustWrite(t, filepath.Join(root, "2026-06-14", "app", "b.md"), "b")
 	// 2026-06-14/web/fix with 1 file
 	mustWrite(t, filepath.Join(root, "2026-06-14", "web", "fix", "c.md"), "c")
+	mustWrite(t, filepath.Join(root, "2026-06-14", "web", "fix", ".dotllm-task"), "")
 	// 2026-06-13/web with 0 files (empty dir)
 	if err := os.MkdirAll(filepath.Join(root, "2026-06-13", "web"), 0o755); err != nil {
 		t.Fatal(err)
@@ -68,6 +69,29 @@ func TestScanDateFirstGroupsAndCounts(t *testing.T) {
 	}
 	if groups[1].Workspaces[0].Files != 0 {
 		t.Errorf("web workspace files = %d, want 0", groups[1].Workspaces[0].Files)
+	}
+}
+
+func TestScanDoesNotTreatUnmarkedChildDirsAsTasks(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "2026-06-14", "app", "note.md"), "a")
+	if err := os.MkdirAll(filepath.Join(root, "2026-06-14", "app", "emptydir"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	groups, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) != 1 {
+		t.Fatalf("groups = %+v, want one date group", groups)
+	}
+	wss := groups[0].Workspaces
+	if len(wss) != 1 {
+		t.Fatalf("workspaces = %+v, want only the plain app workspace", wss)
+	}
+	if wss[0].Name != "app" || wss[0].Task != "" || wss[0].Files != 1 {
+		t.Errorf("workspace = %+v, want plain app with one file", wss[0])
 	}
 }
 

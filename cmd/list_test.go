@@ -20,6 +20,11 @@ func seedArchive(t *testing.T, root string, items map[string][]string) {
 			if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
 				t.Fatal(err)
 			}
+			if strings.Contains(name, "/") {
+				if err := os.WriteFile(filepath.Join(root, date, filepath.FromSlash(name), ".dotllm-task"), nil, 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
 		}
 	}
 }

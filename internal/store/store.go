@@ -9,6 +9,11 @@ import (
 	"strings"
 )
 
+// TaskMarkerName marks a direct child of <date>/<repo> as a task workspace.
+// The marker is ignored when counting files so empty task workspaces remain
+// prunable.
+const TaskMarkerName = ".dotllm-task"
+
 // Root resolves the archive root as an absolute path: $DOTLLM_HOME (with a
 // leading ~ expanded) if set, otherwise <home>/.llm. An absolute result is
 // what lets Stat reliably tell a managed link (into the archive) from a foreign
@@ -48,6 +53,26 @@ func WorkspacePath(root, repo, date, task string) string {
 		return filepath.Join(root, date, repo)
 	}
 	return filepath.Join(root, date, repo, task)
+}
+
+// EnsureTaskMarker marks path as an explicit task workspace.
+func EnsureTaskMarker(path string) error {
+	marker := filepath.Join(path, TaskMarkerName)
+	f, err := os.OpenFile(marker, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if os.IsExist(err) {
+		fi, statErr := os.Lstat(marker)
+		if statErr != nil {
+			return statErr
+		}
+		if fi.IsDir() {
+			return err
+		}
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return f.Close()
 }
 
 // Workspace is one scratch directory inside the archive.
@@ -137,31 +162,34 @@ func scanDateRepo(repoDir, date, repo string) ([]Workspace, error) {
 	if err != nil {
 		return nil, err
 	}
-	var dirs []os.DirEntry
-	hasDirectFile := false
+	var taskDirs []os.DirEntry
+	taskPaths := map[string]bool{}
 	for _, e := range entries {
-		if e.IsDir() {
-			dirs = append(dirs, e)
+		if !e.IsDir() {
 			continue
 		}
-		hasDirectFile = true
+		path := filepath.Join(repoDir, e.Name())
+		if hasTaskMarker(path) {
+			taskDirs = append(taskDirs, e)
+			taskPaths[filepath.Clean(path)] = true
+		}
+	}
+	defaultFiles, err := countFilesSkippingDirs(repoDir, taskPaths)
+	if err != nil {
+		return nil, err
 	}
 
 	var wss []Workspace
-	if len(entries) == 0 || hasDirectFile {
-		n, err := countFiles(repoDir)
-		if err != nil {
-			return nil, err
-		}
+	if len(entries) == 0 || defaultFiles > 0 || len(taskDirs) == 0 {
 		wss = append(wss, Workspace{
 			Repo:  repo,
 			Name:  repo,
 			Date:  date,
 			Path:  repoDir,
-			Files: n,
+			Files: defaultFiles,
 		})
 	}
-	for _, d := range dirs {
+	for _, d := range taskDirs {
 		path := filepath.Join(repoDir, d.Name())
 		n, err := countFiles(path)
 		if err != nil {
@@ -177,6 +205,11 @@ func scanDateRepo(repoDir, date, repo string) ([]Workspace, error) {
 		})
 	}
 	return wss, nil
+}
+
+func hasTaskMarker(dir string) bool {
+	fi, err := os.Lstat(filepath.Join(dir, TaskMarkerName))
+	return err == nil && !fi.IsDir()
 }
 
 func scanLegacyRepo(repoDir, repo string) ([]Workspace, error) {
@@ -236,10 +269,20 @@ func sortLegacy(wss []Workspace) {
 // under dir. Symlinks count so prune never treats a workspace holding curated
 // links as "empty" and deletes them.
 func countFiles(dir string) (int, error) {
+	return countFilesSkippingDirs(dir, nil)
+}
+
+func countFilesSkippingDirs(dir string, skipDirs map[string]bool) (int, error) {
 	n := 0
-	err := filepath.WalkDir(dir, func(_ string, d os.DirEntry, err error) error {
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+		if d.IsDir() && path != dir && skipDirs[filepath.Clean(path)] {
+			return filepath.SkipDir
+		}
+		if d.Name() == TaskMarkerName {
+			return nil
 		}
 		if !d.IsDir() {
 			n++

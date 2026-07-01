@@ -82,6 +82,9 @@ func TestPruneYesRemovesEmptyTaskAndParents(t *testing.T) {
 	if err := os.MkdirAll(emptyTask, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(emptyTask, ".dotllm-task"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := runCmd(a, "prune", "--yes"); err != nil {
 		t.Fatal(err)
@@ -91,6 +94,25 @@ func TestPruneYesRemovesEmptyTaskAndParents(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(a.root, "2026-06-14")); !os.IsNotExist(err) {
 		t.Errorf("empty date parent should be gone")
+	}
+}
+
+func TestPruneDoesNotRemovePlainWorkspaceEmptySubdir(t *testing.T) {
+	a, _ := testApp(t, t.TempDir(), fakeRepo{repo: "app"})
+	plain := filepath.Join(a.root, "2026-06-14", "app")
+	emptySubdir := filepath.Join(plain, "emptydir")
+	if err := os.MkdirAll(emptySubdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(plain, "note.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runCmd(a, "prune", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(emptySubdir); err != nil {
+		t.Errorf("ordinary empty subdir should not be pruned as a task: %v", err)
 	}
 }
 

@@ -123,6 +123,11 @@ func runInit(a *app, in initArgs) error {
 	if err != nil {
 		return err
 	}
+	if r.Task != "" {
+		if err := store.EnsureTaskMarker(canonical); err != nil {
+			return err
+		}
+	}
 	return reportInit(a, in, res)
 }
 

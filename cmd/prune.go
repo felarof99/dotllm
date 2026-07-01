@@ -14,10 +14,10 @@ func newPruneCmd(a *app) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "prune",
 		Short: "Remove empty workspace directories from the archive",
-		Long: `prune removes empty dated workspace directories (the kind left behind when
-init fires on a tmux pane where no files were written) and any repo directory
-left empty afterward. It is safe by default: it previews and deletes nothing
-unless --yes is given.`,
+		Long: `prune removes empty workspace directories (the kind left behind when init
+fires on a tmux pane where no files were written) and any date/repo parents left
+empty afterward. Empty legacy repo-first archives are pruned too. It is safe by
+default: it previews and deletes nothing unless --yes is given.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runPrune(a, yes, dryRun, jsonOut)

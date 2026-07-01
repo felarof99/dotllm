@@ -13,7 +13,10 @@ func newListCmd(a *app) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list [repo-substring]",
 		Short: "Browse tracked workspaces in the home archive",
-		Args:  cobra.MaximumNArgs(1),
+		Long: `list browses tracked workspaces in the home archive, grouped by recent date
+for date-first archives. Older legacy repo-first archives are shown in a
+separate legacy section so old data remains visible.`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			filter := ""
 			if len(args) > 0 {
