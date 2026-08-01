@@ -64,6 +64,7 @@ every new tmux pane. With no arguments, dotllm prints the current status.`,
 	rootCmd.AddCommand(newListCmd(a))
 	rootCmd.AddCommand(newPruneCmd(a))
 	rootCmd.AddCommand(newTrustCmd(a))
+	rootCmd.AddCommand(newConfirmCmd(a))
 	rootCmd.SetOut(a.out)
 	rootCmd.SetErr(a.errOut)
 	rootCmd.CompletionOptions.HiddenDefaultCmd = true

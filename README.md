@@ -76,6 +76,10 @@ dotllm list [substr]   Browse the archive, grouped by recent date, with file cou
 dotllm prune           Remove empty workspace dirs (and now-empty date/repo parents).
                        Safe by default: previews unless --yes.  --dry-run, --json.
 
+dotllm confirm [ask|auto]
+                       Show or set whether tools should ask before destructive
+                       cleanup.  Defaults to "ask".  --json.
+
 dotllm                 With no arguments, prints status.
 ```
 
@@ -86,6 +90,37 @@ dotllm                 With no arguments, prints status.
   archive (never overwriting an existing archive file — a name clash aborts the
   adoption and tells you which files conflict) and it's replaced with the symlink.
 - If the archive dir exists but the local link is gone, it's re-created.
+
+## Cleanup confirmation (`dotllm confirm`)
+
+Some tools delete things — a worktree, a branch, a background agent. By default
+they should stop and ask you first. `dotllm confirm` is where you turn that off
+when you don't want to be asked every time.
+
+```sh
+dotllm confirm         # -> ask   (the default)
+dotllm confirm auto    # stop asking for this workspace
+dotllm confirm ask     # go back to asking
+```
+
+The answer is one file, `.llm/cleanup.sentinel`. Because `.llm/` is per repo and
+per day, so is the choice — it does not leak into tomorrow or into another repo.
+
+**The safety rule: only the exact word `auto` turns confirmation off.** Every
+other outcome means "ask" — no file, no `.llm` at all, an unreadable file, a
+half-written file, or a word this version doesn't know. You can only lose the
+prompt on purpose, never by accident. `dotllm confirm auto` writes to a temp
+file and renames it, so a crash mid-write cannot leave something half-readable.
+
+Scripts should read the word, not the exit code:
+
+```sh
+policy="$(dotllm confirm 2>/dev/null || echo ask)"
+[ "$policy" = auto ] || show_the_prompt
+```
+
+That line fails safe on its own: if `dotllm` is missing, errors, or prints
+something unexpected, `policy` is not `auto`, and the prompt still shows.
 
 ## Config
 
