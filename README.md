@@ -78,7 +78,8 @@ dotllm prune           Remove empty workspace dirs (and now-empty date/repo pare
 
 dotllm confirm [ask|auto]
                        Show or set whether tools should ask before destructive
-                       cleanup.  Defaults to "ask".  --json.
+                       cleanup.  Scoped: --run <name> or --all.  Defaults to
+                       "ask" for everything.  --json.
 
 dotllm                 With no arguments, prints status.
 ```
@@ -98,29 +99,44 @@ they should stop and ask you first. `dotllm confirm` is where you turn that off
 when you don't want to be asked every time.
 
 ```sh
-dotllm confirm         # -> ask   (the default)
-dotllm confirm auto    # stop asking for this workspace
-dotllm confirm ask     # go back to asking
+dotllm confirm --run build-parser        # -> ask (the default)
+dotllm confirm auto --run build-parser   # let that one run skip the prompt
+dotllm confirm auto --all                # let every run here skip it
+dotllm confirm ask                       # go back to asking for everything
 ```
 
-The answer is one file, `.llm/cleanup.sentinel`. Because `.llm/` is per repo and
-per day, so is the choice — it does not leak into tomorrow or into another repo.
+**Turning it off is always scoped, and you have to say which scope you mean.**
+Bare `dotllm confirm auto` is refused. That is deliberate, and it is the whole
+point of the design:
 
-**The safety rule: only the exact word `auto` turns confirmation off.** Every
+> Every worktree of a repo shares one `.llm` (see *Caveats*). So a background
+> agent that switches confirmation off for **its own** run would otherwise
+> switch it off for every **other** agent working in that repo — including runs
+> started later that nobody thought about. Requiring `--run <name>` means a
+> grant only ever covers the run it names. `--all` is still available when you
+> genuinely want the blanket, but you have to type it.
+
+**The safety rule: only an exact grant line turns confirmation off.** Every
 other outcome means "ask" — no file, no `.llm` at all, an unreadable file, a
-half-written file, or a word this version doesn't know. You can only lose the
-prompt on purpose, never by accident. `dotllm confirm auto` writes to a temp
-file and renames it, so a crash mid-write cannot leave something half-readable.
+half-written file, a name that doesn't match, or a line this version doesn't
+recognize. You can only lose the prompt on purpose, never by accident. Writes
+go through a temp file and a rename, so a crash mid-write cannot leave
+something half-readable.
 
 Scripts should read the word, not the exit code:
 
 ```sh
-policy="$(dotllm confirm 2>/dev/null || echo ask)"
+policy="$(dotllm confirm --run "$slug" 2>/dev/null || echo ask)"
 [ "$policy" = auto ] || show_the_prompt
 ```
 
 That line fails safe on its own: if `dotllm` is missing, errors, or prints
 something unexpected, `policy` is not `auto`, and the prompt still shows.
+
+**Scope in time:** the grant lives in the archive directory the `.llm` symlink
+points at. That path has a date in it, but the link is only pointed at a new
+date when someone re-runs `dotllm init` — it does *not* roll over at midnight
+by itself. Treat a grant as lasting until you clear it with `dotllm confirm ask`.
 
 ## Config
 
